@@ -200,5 +200,55 @@ class CheckoutReturnTests(unittest.TestCase):
             self.service.return_equipment(loan_id, return_date="2026-09-24")
 
 
+class ReportsSearchSeedTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.temp_dir.name) / "test_makerspace.db"
+        self.conn = get_connection(self.db_path)
+        initialize_database(self.conn)
+        self.service = MakerSpaceService(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        self.temp_dir.cleanup()
+
+    def test_search_members_and_equipment_by_partial_text_or_id(self):
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        equipment_id = self.service.register_equipment("Soldering Kit", "Electronics", "High", True)
+
+        self.assertEqual(self.service.search_members("Amina")[0]["member_id"], member_id)
+        self.assertEqual(self.service.search_members(str(member_id))[0]["student_id"], "STU001")
+        self.assertEqual(self.service.search_equipment("solder")[0]["equipment_id"], equipment_id)
+        self.assertEqual(self.service.search_equipment(str(equipment_id))[0]["name"], "Soldering Kit")
+
+    def test_reports_return_expected_rows(self):
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        self.service.add_training(member_id, "Electronics", "2026-09-21")
+        soldering_id = self.service.register_equipment("Soldering Kit", "Electronics", "High", True)
+        camera_id = self.service.register_equipment("Camera Kit", "Media", "Medium", False)
+        self.service.update_equipment(camera_id, condition_status="Needs Maintenance")
+
+        self.service.checkout_equipment(member_id, soldering_id, checkout_date="2026-09-01", loan_days=3)
+
+        self.assertEqual(len(self.service.report_currently_borrowed()), 1)
+        self.assertEqual(len(self.service.report_overdue_loans(today="2026-09-10")), 1)
+        self.assertEqual(self.service.report_safety_restricted_equipment()[0]["name"], "Soldering Kit")
+        self.assertEqual(self.service.report_member_training_summary()[0]["trained_categories"], "Electronics")
+        self.assertEqual(self.service.report_equipment_needing_maintenance()[0]["name"], "Camera Kit")
+
+    def test_seed_demo_data_is_idempotent(self):
+        self.service.seed_demo_data()
+        self.service.seed_demo_data()
+
+        members = self.service.list_members(include_inactive=True)
+        equipment = self.service.list_equipment()
+        training = self.service.list_training_records()
+
+        self.assertGreaterEqual(len(members), 3)
+        self.assertGreaterEqual(len(equipment), 5)
+        self.assertGreaterEqual(len(training), 2)
+        self.assertEqual(len([m for m in members if m["student_id"] == "STU001"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

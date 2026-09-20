@@ -252,6 +252,124 @@ class MakerSpaceService:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def search_members(self, query: str) -> list[dict]:
+        cleaned = self._require_text(query, "Search query")
+        pattern = f"%{cleaned.lower()}%"
+        rows = self.conn.execute(
+            """
+            SELECT * FROM members
+            WHERE lower(name) LIKE ?
+               OR lower(student_id) LIKE ?
+               OR CAST(member_id AS TEXT) = ?
+            ORDER BY name
+            """,
+            (pattern, pattern, cleaned),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def search_equipment(self, query: str) -> list[dict]:
+        cleaned = self._require_text(query, "Search query")
+        pattern = f"%{cleaned.lower()}%"
+        rows = self.conn.execute(
+            """
+            SELECT * FROM equipment
+            WHERE lower(name) LIKE ?
+               OR lower(category) LIKE ?
+               OR CAST(equipment_id AS TEXT) = ?
+            ORDER BY category, name
+            """,
+            (pattern, pattern, cleaned),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def report_currently_borrowed(self) -> list[dict]:
+        return self.list_active_loans()
+
+    def report_overdue_loans(self, today: str | None = None) -> list[dict]:
+        compare = date.fromisoformat(today).isoformat() if today else date.today().isoformat()
+        rows = self.conn.execute(
+            """
+            SELECT l.loan_id,
+                   m.name AS member_name,
+                   e.name AS equipment_name,
+                   e.category,
+                   l.checkout_date,
+                   l.due_date
+            FROM loans l
+            JOIN members m ON m.member_id = l.member_id
+            JOIN equipment e ON e.equipment_id = l.equipment_id
+            WHERE l.status = 'Active' AND l.due_date < ?
+            ORDER BY l.due_date
+            """,
+            (compare,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def report_safety_restricted_equipment(self) -> list[dict]:
+        rows = self.conn.execute(
+            """
+            SELECT equipment_id, name, category, safety_level, condition_status, available
+            FROM equipment
+            WHERE training_required = 1
+            ORDER BY safety_level DESC, category, name
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def report_member_training_summary(self) -> list[dict]:
+        rows = self.conn.execute(
+            """
+            SELECT m.member_id,
+                   m.name,
+                   m.student_id,
+                   COALESCE(group_concat(tr.category, ', '), 'No training') AS trained_categories
+            FROM members m
+            LEFT JOIN training_records tr ON tr.member_id = m.member_id
+            GROUP BY m.member_id, m.name, m.student_id
+            ORDER BY m.name
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def report_equipment_needing_maintenance(self) -> list[dict]:
+        rows = self.conn.execute(
+            """
+            SELECT equipment_id, name, category, safety_level, condition_status
+            FROM equipment
+            WHERE condition_status IN ('Needs Maintenance', 'Retired')
+            ORDER BY condition_status, category, name
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def seed_demo_data(self) -> None:
+        members = [
+            ("STU001", "Amina Doe", "amina@example.com", "555-0101"),
+            ("STU002", "Kofi Mensah", "kofi@example.com", "555-0102"),
+            ("STU003", "Lina Patel", "lina@example.com", "555-0103"),
+        ]
+        for student_id, name, email, phone in members:
+            if not self.conn.execute("SELECT 1 FROM members WHERE student_id = ?", (student_id,)).fetchone():
+                self.register_member(student_id, name, email, phone)
+
+        equipment_items = [
+            ("Soldering Kit", "Electronics", "High", True, "Good"),
+            ("3D Printer Nozzle Set", "3D Printing", "Medium", True, "Good"),
+            ("DSLR Camera Kit", "Media", "Medium", False, "Good"),
+            ("Cordless Drill", "Power Tools", "High", True, "Needs Maintenance"),
+            ("Measuring Caliper", "General Tools", "Low", False, "Good"),
+        ]
+        for name, category, safety_level, training_required, condition_status in equipment_items:
+            if not self.conn.execute("SELECT 1 FROM equipment WHERE name = ?", (name,)).fetchone():
+                self.register_equipment(name, category, safety_level, training_required, condition_status)
+
+        amina = self.conn.execute("SELECT member_id FROM members WHERE student_id = 'STU001'").fetchone()
+        kofi = self.conn.execute("SELECT member_id FROM members WHERE student_id = 'STU002'").fetchone()
+        if amina and not self.member_has_training(amina["member_id"], "Electronics"):
+            self.add_training(amina["member_id"], "Electronics", "2026-09-21")
+        if kofi and not self.member_has_training(kofi["member_id"], "3D Printing"):
+            self.add_training(kofi["member_id"], "3D Printing", "2026-09-21")
+
     def _get_member(self, member_id: int) -> dict:
         row = self.conn.execute("SELECT * FROM members WHERE member_id = ?", (member_id,)).fetchone()
         if row is None:
