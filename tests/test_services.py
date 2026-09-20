@@ -199,6 +199,16 @@ class CheckoutReturnTests(unittest.TestCase):
         with self.assertRaisesRegex(ServiceError, "already returned"):
             self.service.return_equipment(loan_id, return_date="2026-09-24")
 
+    def test_checkout_and_return_reject_invalid_dates_with_service_error(self):
+        self.service.add_training(self.member_id, "Electronics", "2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "Checkout date must use YYYY-MM-DD"):
+            self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="bad-date")
+
+        loan_id = self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="2026-09-21")
+        with self.assertRaisesRegex(ServiceError, "Return date must use YYYY-MM-DD"):
+            self.service.return_equipment(loan_id, return_date="bad-date")
+
 
 class ReportsSearchSeedTests(unittest.TestCase):
     def setUp(self):

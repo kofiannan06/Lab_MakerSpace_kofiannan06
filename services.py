@@ -197,7 +197,7 @@ class MakerSpaceService:
         if equipment["training_required"] and not self.member_has_training(member_id, equipment["category"]):
             raise ServiceError(f"{member['name']} needs training for {equipment['category']} before checkout.")
 
-        checkout = date.fromisoformat(checkout_date) if checkout_date else date.today()
+        checkout = date.fromisoformat(self._require_date(checkout_date, "Checkout date")) if checkout_date else date.today()
         due = checkout + timedelta(days=loan_days)
         cursor = self.conn.execute(
             """
@@ -218,7 +218,7 @@ class MakerSpaceService:
         if loan["status"] != "Active" or loan["return_date"] is not None:
             raise ServiceError(f"Loan ID {loan_id} was already returned.")
 
-        returned = date.fromisoformat(return_date).isoformat() if return_date else date.today().isoformat()
+        returned = date.fromisoformat(self._require_date(return_date, "Return date")).isoformat() if return_date else date.today().isoformat()
         self.conn.execute(
             """
             UPDATE loans
