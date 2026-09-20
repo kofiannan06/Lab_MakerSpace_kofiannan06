@@ -361,6 +361,63 @@ class MakerSpaceService:
         shutil.copy2(source, destination)
         return destination
 
+    def add_condition_note(
+        self,
+        equipment_id: int,
+        note: str,
+        logged_by: str,
+        logged_date: str,
+    ) -> int:
+        self._get_equipment(equipment_id)
+        note = self._require_text(note, "Audit note")
+        logged_by = self._require_text(logged_by, "Logged by")
+        logged_date = self._require_date(logged_date, "Logged date")
+        cursor = self.conn.execute(
+            """
+            INSERT INTO condition_notes (equipment_id, note, logged_by, logged_date)
+            VALUES (?, ?, ?, ?)
+            """,
+            (equipment_id, note, logged_by, logged_date),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid)
+
+    def list_condition_notes(self, equipment_id: int | None = None) -> list[dict]:
+        if equipment_id is not None:
+            self._get_equipment(equipment_id)
+            rows = self.conn.execute(
+                """
+                SELECT cn.note_id,
+                       cn.equipment_id,
+                       e.name AS equipment_name,
+                       e.condition_status,
+                       cn.note,
+                       cn.logged_by,
+                       cn.logged_date
+                FROM condition_notes cn
+                JOIN equipment e ON e.equipment_id = cn.equipment_id
+                WHERE cn.equipment_id = ?
+                ORDER BY cn.logged_date DESC, cn.note_id DESC
+                """,
+                (equipment_id,),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """
+                SELECT cn.note_id,
+                       cn.equipment_id,
+                       e.name AS equipment_name,
+                       e.condition_status,
+                       cn.note,
+                       cn.logged_by,
+                       cn.logged_date
+                FROM condition_notes cn
+                JOIN equipment e ON e.equipment_id = cn.equipment_id
+                ORDER BY cn.logged_date DESC, cn.note_id DESC
+                """
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def seed_demo_data(self) -> None:
         members = [
             ("STU001", "Amina Doe", "amina@alustudent.com", "555-0101"),

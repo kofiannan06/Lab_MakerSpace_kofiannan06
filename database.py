@@ -54,6 +54,15 @@ def initialize_database(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (member_id) REFERENCES members(member_id),
             FOREIGN KEY (equipment_id) REFERENCES equipment(equipment_id)
         );
+
+        CREATE TABLE IF NOT EXISTS condition_notes (
+            note_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            equipment_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            logged_by TEXT NOT NULL,
+            logged_date TEXT NOT NULL,
+            FOREIGN KEY (equipment_id) REFERENCES equipment(equipment_id)
+        );
         """
     )
     conn.commit()

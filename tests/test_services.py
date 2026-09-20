@@ -183,6 +183,38 @@ class ServiceCrudTests(unittest.TestCase):
         finally:
             copied_conn.close()
 
+    def test_condition_audit_notes_are_stored_and_listed_for_equipment(self):
+        equipment_id = self.service.register_equipment("Cordless Drill", "Power Tools", "High", True)
+
+        note_id = self.service.add_condition_note(
+            equipment_id,
+            "Battery overheats after 10 minutes",
+            "Kofi",
+            "2026-09-21",
+        )
+
+        notes = self.service.list_condition_notes(equipment_id)
+        self.assertIsInstance(note_id, int)
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0]["equipment_name"], "Cordless Drill")
+        self.assertEqual(notes[0]["note"], "Battery overheats after 10 minutes")
+        self.assertEqual(notes[0]["logged_by"], "Kofi")
+
+    def test_condition_audit_notes_validate_equipment_note_author_and_date(self):
+        equipment_id = self.service.register_equipment("Cordless Drill", "Power Tools", "High", True)
+
+        with self.assertRaisesRegex(ServiceError, "Equipment ID 999"):
+            self.service.add_condition_note(999, "Unsafe cable", "Kofi", "2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "Audit note is required"):
+            self.service.add_condition_note(equipment_id, "", "Kofi", "2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "Logged by is required"):
+            self.service.add_condition_note(equipment_id, "Unsafe cable", "", "2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "Logged date must use YYYY-MM-DD"):
+            self.service.add_condition_note(equipment_id, "Unsafe cable", "Kofi", "bad-date")
+
 
 class CheckoutReturnTests(unittest.TestCase):
     def setUp(self):

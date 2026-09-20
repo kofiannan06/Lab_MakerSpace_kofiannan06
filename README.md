@@ -26,6 +26,7 @@ python -m unittest discover -s tests -p "test*.py" -v
 - Require member emails to use `@alustudent.com` or `@alueducation.com`.
 - Register, list, and update equipment.
 - Track equipment category, safety level, condition, and availability.
+- Add equipment condition audit notes for maintenance and safety concerns.
 - Add category-specific safety training records.
 - Checkout equipment with validation.
 - Return equipment and update availability.
@@ -56,6 +57,7 @@ python -m unittest discover -s tests -p "test*.py" -v
 - Safety-restricted equipment.
 - Member training summary.
 - Equipment needing maintenance.
+- Equipment condition audit notes.
 
 ## Suggested Live Demo Script
 
@@ -68,7 +70,9 @@ python -m unittest discover -s tests -p "test*.py" -v
 7. Add Electronics training for the member.
 8. Repeat checkout successfully.
 9. Return the equipment.
-10. Open reports and show currently borrowed equipment, overdue loans, safety-restricted equipment, member training summary, and equipment needing maintenance.
+10. Add a condition audit note for a maintenance item, such as `Battery overheats after 10 minutes`.
+11. View condition audit notes to show the safety audit trail.
+12. Open reports and show currently borrowed equipment, overdue loans, safety-restricted equipment, member training summary, and equipment needing maintenance.
 
 ## Rubric Checklist
 
@@ -79,6 +83,7 @@ python -m unittest discover -s tests -p "test*.py" -v
 - Email validation rejects non-school email domains.
 - Reports are SQL-backed and available from the CLI.
 - The database can be exported locally from the main menu.
+- Equipment condition audit notes record why an item needs maintenance and who logged the issue.
 - Tests verify the main service workflows.
 
 ## AI Assistance Disclosure

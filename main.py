@@ -97,7 +97,9 @@ def manage_equipment(service: MakerSpaceService) -> None:
         print("2. List equipment")
         print("3. Update condition")
         print("4. Update availability")
-        print("5. Back")
+        print("5. Add condition audit note")
+        print("6. View condition audit notes")
+        print("7. Back")
         choice = input("Choose: ").strip()
         try:
             if choice == "1":
@@ -124,10 +126,22 @@ def manage_equipment(service: MakerSpaceService) -> None:
                 )
                 print("Equipment availability updated.")
             elif choice == "5":
+                note_id = service.add_condition_note(
+                    prompt_int("Equipment ID"),
+                    prompt_required("Audit note"),
+                    prompt_required("Logged by"),
+                    prompt_required("Logged date YYYY-MM-DD"),
+                )
+                print(f"Condition audit note created with ID {note_id}.")
+            elif choice == "6":
+                equipment_id_text = prompt_optional("Equipment ID")
+                equipment_id = int(equipment_id_text) if equipment_id_text else None
+                print_rows(service.list_condition_notes(equipment_id))
+            elif choice == "7":
                 return
             else:
                 print("Invalid choice.")
-        except ServiceError as exc:
+        except (ServiceError, ValueError) as exc:
             print(f"Error: {exc}")
 
 
