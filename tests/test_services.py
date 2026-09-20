@@ -138,5 +138,67 @@ class ServiceCrudTests(unittest.TestCase):
             self.service.add_training(member_id, "Electronics", "2026-09-22")
 
 
+class CheckoutReturnTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.temp_dir.name) / "test_makerspace.db"
+        self.conn = get_connection(self.db_path)
+        initialize_database(self.conn)
+        self.service = MakerSpaceService(self.conn)
+        self.member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        self.equipment_id = self.service.register_equipment("Soldering Kit", "Electronics", "High", True)
+
+    def tearDown(self):
+        self.conn.close()
+        self.temp_dir.cleanup()
+
+    def test_checkout_rejects_missing_member_or_equipment(self):
+        with self.assertRaisesRegex(ServiceError, "Member ID 999"):
+            self.service.checkout_equipment(999, self.equipment_id, checkout_date="2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "Equipment ID 999"):
+            self.service.checkout_equipment(self.member_id, 999, checkout_date="2026-09-21")
+
+    def test_checkout_requires_matching_category_training(self):
+        self.service.add_training(self.member_id, "Power Tools", "2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "training for Electronics"):
+            self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="2026-09-21")
+
+    def test_checkout_succeeds_after_training_and_marks_unavailable(self):
+        self.service.add_training(self.member_id, "Electronics", "2026-09-21")
+        loan_id = self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="2026-09-21")
+
+        self.assertIsInstance(loan_id, int)
+        equipment = self.service.list_equipment()[0]
+        self.assertEqual(equipment["available"], 0)
+        self.assertEqual(len(self.service.list_active_loans()), 1)
+
+    def test_checkout_blocks_unavailable_and_maintenance_equipment(self):
+        self.service.add_training(self.member_id, "Electronics", "2026-09-21")
+        self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="2026-09-21")
+
+        with self.assertRaisesRegex(ServiceError, "not available"):
+            self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="2026-09-22")
+
+        camera_id = self.service.register_equipment("Camera Kit", "Media", "Medium", False)
+        self.service.update_equipment(camera_id, condition_status="Needs Maintenance")
+        with self.assertRaisesRegex(ServiceError, "cannot be loaned"):
+            self.service.checkout_equipment(self.member_id, camera_id, checkout_date="2026-09-22")
+
+    def test_return_equipment_closes_loan_and_rejects_duplicate_return(self):
+        self.service.add_training(self.member_id, "Electronics", "2026-09-21")
+        loan_id = self.service.checkout_equipment(self.member_id, self.equipment_id, checkout_date="2026-09-21")
+
+        self.service.return_equipment(loan_id, return_date="2026-09-23")
+
+        equipment = self.service.list_equipment()[0]
+        self.assertEqual(equipment["available"], 1)
+        self.assertEqual(self.service.list_active_loans(), [])
+
+        with self.assertRaisesRegex(ServiceError, "already returned"):
+            self.service.return_equipment(loan_id, return_date="2026-09-24")
+
+
 if __name__ == "__main__":
     unittest.main()

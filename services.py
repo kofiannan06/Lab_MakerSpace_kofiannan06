@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 
 
 VALID_CONDITIONS = {"Good", "Needs Maintenance", "Retired"}
@@ -176,6 +176,82 @@ class MakerSpaceService:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def checkout_equipment(
+        self,
+        member_id: int,
+        equipment_id: int,
+        checkout_date: str | None = None,
+        loan_days: int = 7,
+    ) -> int:
+        member = self._get_member(member_id)
+        equipment = self._get_equipment(equipment_id)
+
+        if not member["active"]:
+            raise ServiceError("Inactive members cannot borrow equipment.")
+        if not equipment["available"]:
+            raise ServiceError(f"{equipment['name']} is not available.")
+        if equipment["condition_status"] != "Good":
+            raise ServiceError(
+                f"{equipment['name']} cannot be loaned because its condition is {equipment['condition_status']}."
+            )
+        if equipment["training_required"] and not self.member_has_training(member_id, equipment["category"]):
+            raise ServiceError(f"{member['name']} needs training for {equipment['category']} before checkout.")
+
+        checkout = date.fromisoformat(checkout_date) if checkout_date else date.today()
+        due = checkout + timedelta(days=loan_days)
+        cursor = self.conn.execute(
+            """
+            INSERT INTO loans (member_id, equipment_id, checkout_date, due_date, status)
+            VALUES (?, ?, ?, ?, 'Active')
+            """,
+            (member_id, equipment_id, checkout.isoformat(), due.isoformat()),
+        )
+        self.conn.execute(
+            "UPDATE equipment SET available = 0 WHERE equipment_id = ?",
+            (equipment_id,),
+        )
+        self.conn.commit()
+        return int(cursor.lastrowid)
+
+    def return_equipment(self, loan_id: int, return_date: str | None = None) -> None:
+        loan = self._get_loan(loan_id)
+        if loan["status"] != "Active" or loan["return_date"] is not None:
+            raise ServiceError(f"Loan ID {loan_id} was already returned.")
+
+        returned = date.fromisoformat(return_date).isoformat() if return_date else date.today().isoformat()
+        self.conn.execute(
+            """
+            UPDATE loans
+            SET return_date = ?, status = 'Returned'
+            WHERE loan_id = ?
+            """,
+            (returned, loan_id),
+        )
+        self.conn.execute(
+            "UPDATE equipment SET available = 1 WHERE equipment_id = ?",
+            (loan["equipment_id"],),
+        )
+        self.conn.commit()
+
+    def list_active_loans(self) -> list[dict]:
+        rows = self.conn.execute(
+            """
+            SELECT l.loan_id,
+                   m.name AS member_name,
+                   e.name AS equipment_name,
+                   e.category,
+                   l.checkout_date,
+                   l.due_date,
+                   l.status
+            FROM loans l
+            JOIN members m ON m.member_id = l.member_id
+            JOIN equipment e ON e.equipment_id = l.equipment_id
+            WHERE l.status = 'Active'
+            ORDER BY l.due_date
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def _get_member(self, member_id: int) -> dict:
         row = self.conn.execute("SELECT * FROM members WHERE member_id = ?", (member_id,)).fetchone()
         if row is None:
@@ -186,4 +262,10 @@ class MakerSpaceService:
         row = self.conn.execute("SELECT * FROM equipment WHERE equipment_id = ?", (equipment_id,)).fetchone()
         if row is None:
             raise ServiceError(f"Equipment ID {equipment_id} was not found.")
+        return dict(row)
+
+    def _get_loan(self, loan_id: int) -> dict:
+        row = self.conn.execute("SELECT * FROM loans WHERE loan_id = ?", (loan_id,)).fetchone()
+        if row is None:
+            raise ServiceError(f"Loan ID {loan_id} was not found.")
         return dict(row)
