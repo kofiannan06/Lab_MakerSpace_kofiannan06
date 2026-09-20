@@ -4,6 +4,7 @@ from pathlib import Path
 
 from database import get_connection, initialize_database
 from models import Equipment, Loan, Member, TrainingRecord
+from services import MakerSpaceService, ServiceError
 
 
 class DatabaseSchemaTests(unittest.TestCase):
@@ -78,6 +79,63 @@ class ModelBehaviorTests(unittest.TestCase):
 
         self.assertIn("Amina Doe", member.display_label())
         self.assertIn("Electronics", training.display_label())
+
+
+class ServiceCrudTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.temp_dir.name) / "test_makerspace.db"
+        self.conn = get_connection(self.db_path)
+        initialize_database(self.conn)
+        self.service = MakerSpaceService(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+        self.temp_dir.cleanup()
+
+    def test_register_member_rejects_blank_and_duplicate_student_id(self):
+        with self.assertRaisesRegex(ServiceError, "required"):
+            self.service.register_member("", "Amina Doe", "amina@example.com", "555-0101")
+
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        self.assertIsInstance(member_id, int)
+
+        with self.assertRaisesRegex(ServiceError, "already exists"):
+            self.service.register_member("STU001", "Amina Again", "amina2@example.com", "555-0102")
+
+    def test_member_update_and_deactivation(self):
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        self.service.update_member(member_id, name="Amina Mensah", active=False)
+
+        inactive_members = self.service.list_members(include_inactive=True)
+        self.assertEqual(inactive_members[0]["name"], "Amina Mensah")
+        self.assertEqual(inactive_members[0]["active"], 0)
+        self.assertEqual(self.service.list_members(), [])
+
+    def test_register_and_update_equipment(self):
+        equipment_id = self.service.register_equipment(
+            "Soldering Kit",
+            "Electronics",
+            "High",
+            True,
+        )
+        self.service.update_equipment(equipment_id, condition_status="Needs Maintenance")
+
+        equipment = self.service.list_equipment()
+        self.assertEqual(equipment[0]["name"], "Soldering Kit")
+        self.assertEqual(equipment[0]["condition_status"], "Needs Maintenance")
+        self.assertEqual(equipment[0]["training_required"], 1)
+
+    def test_training_records_are_category_specific(self):
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        training_id = self.service.add_training(member_id, "Electronics", "2026-09-21")
+
+        self.assertIsInstance(training_id, int)
+        self.assertTrue(self.service.member_has_training(member_id, "Electronics"))
+        self.assertFalse(self.service.member_has_training(member_id, "Power Tools"))
+
+        with self.assertRaisesRegex(ServiceError, "already has"):
+            self.service.add_training(member_id, "Electronics", "2026-09-22")
 
 
 if __name__ == "__main__":
