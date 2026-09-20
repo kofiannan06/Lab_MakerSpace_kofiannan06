@@ -1,0 +1,4 @@
+.superpowers/
+makerspace.db
+__pycache__/
+*.pyc
