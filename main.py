@@ -2,6 +2,9 @@ from database import DEFAULT_DB_PATH, get_connection, initialize_database
 from services import MakerSpaceService, ServiceError
 
 
+EXPORT_PATH = "exports/makerspace_export.db"
+
+
 def prompt_required(label: str) -> str:
     while True:
         value = input(f"{label}: ").strip()
@@ -209,6 +212,14 @@ def reports_menu(service: MakerSpaceService) -> None:
             print(f"Error: {exc}")
 
 
+def export_database_menu(service: MakerSpaceService) -> None:
+    try:
+        exported_path = service.export_database(DEFAULT_DB_PATH, EXPORT_PATH)
+        print(f"Database exported to {exported_path}.")
+    except ServiceError as exc:
+        print(f"Error: {exc}")
+
+
 def main() -> None:
     conn = get_connection(DEFAULT_DB_PATH)
     initialize_database(conn)
@@ -226,7 +237,8 @@ def main() -> None:
             print("6. Search records")
             print("7. Reports")
             print("8. Seed sample demo data")
-            print("9. Exit")
+            print("9. Export database")
+            print("10. Exit")
             choice = input("Choose: ").strip()
             if choice == "1":
                 manage_members(service)
@@ -246,6 +258,8 @@ def main() -> None:
                 service.seed_demo_data()
                 print("Sample demo data is ready.")
             elif choice == "9":
+                export_database_menu(service)
+            elif choice == "10":
                 print("Goodbye.")
                 return
             else:

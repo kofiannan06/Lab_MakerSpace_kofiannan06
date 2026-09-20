@@ -95,22 +95,52 @@ class ServiceCrudTests(unittest.TestCase):
 
     def test_register_member_rejects_blank_and_duplicate_student_id(self):
         with self.assertRaisesRegex(ServiceError, "required"):
-            self.service.register_member("", "Amina Doe", "amina@example.com", "555-0101")
+            self.service.register_member("", "Amina Doe", "amina@alustudent.com", "555-0101")
 
-        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
         self.assertIsInstance(member_id, int)
 
         with self.assertRaisesRegex(ServiceError, "already exists"):
-            self.service.register_member("STU001", "Amina Again", "amina2@example.com", "555-0102")
+            self.service.register_member("STU001", "Amina Again", "amina2@alustudent.com", "555-0102")
+
+    def test_register_member_requires_school_email_domain(self):
+        with self.assertRaisesRegex(ServiceError, "school email"):
+            self.service.register_member("STU001", "Amina Doe", "", "555-0101")
+
+        with self.assertRaisesRegex(ServiceError, "school email"):
+            self.service.register_member("STU001", "Amina Doe", "amina@gmail.com", "555-0101")
+
+        student_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
+        facilitator_id = self.service.register_member(
+            "FAC001",
+            "Chris Bergue",
+            "chris@alueducation.com",
+            "555-0199",
+        )
+
+        self.assertIsInstance(student_id, int)
+        self.assertIsInstance(facilitator_id, int)
 
     def test_member_update_and_deactivation(self):
-        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
         self.service.update_member(member_id, name="Amina Mensah", active=False)
 
         inactive_members = self.service.list_members(include_inactive=True)
         self.assertEqual(inactive_members[0]["name"], "Amina Mensah")
         self.assertEqual(inactive_members[0]["active"], 0)
         self.assertEqual(self.service.list_members(), [])
+
+    def test_member_update_rejects_non_school_email(self):
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
+
+        with self.assertRaisesRegex(ServiceError, "school email"):
+            self.service.update_member(member_id, email="amina@yahoo.com")
+
+        self.service.update_member(member_id, email="amina.mensah@alustudent.com")
+        self.assertEqual(
+            self.service.list_members(include_inactive=True)[0]["email"],
+            "amina.mensah@alustudent.com",
+        )
 
     def test_register_and_update_equipment(self):
         equipment_id = self.service.register_equipment(
@@ -127,7 +157,7 @@ class ServiceCrudTests(unittest.TestCase):
         self.assertEqual(equipment[0]["training_required"], 1)
 
     def test_training_records_are_category_specific(self):
-        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
         training_id = self.service.add_training(member_id, "Electronics", "2026-09-21")
 
         self.assertIsInstance(training_id, int)
@@ -137,6 +167,22 @@ class ServiceCrudTests(unittest.TestCase):
         with self.assertRaisesRegex(ServiceError, "already has"):
             self.service.add_training(member_id, "Electronics", "2026-09-22")
 
+    def test_export_database_copies_database_file(self):
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
+        self.assertIsInstance(member_id, int)
+        export_path = Path(self.temp_dir.name) / "exports" / "makerspace_export.db"
+
+        copied_path = self.service.export_database(self.db_path, export_path)
+
+        self.assertEqual(copied_path, export_path)
+        self.assertTrue(export_path.exists())
+        copied_conn = get_connection(export_path)
+        try:
+            row = copied_conn.execute("SELECT name FROM members WHERE student_id = 'STU001'").fetchone()
+            self.assertEqual(row["name"], "Amina Doe")
+        finally:
+            copied_conn.close()
+
 
 class CheckoutReturnTests(unittest.TestCase):
     def setUp(self):
@@ -145,7 +191,7 @@ class CheckoutReturnTests(unittest.TestCase):
         self.conn = get_connection(self.db_path)
         initialize_database(self.conn)
         self.service = MakerSpaceService(self.conn)
-        self.member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        self.member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
         self.equipment_id = self.service.register_equipment("Soldering Kit", "Electronics", "High", True)
 
     def tearDown(self):
@@ -223,7 +269,7 @@ class ReportsSearchSeedTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_search_members_and_equipment_by_partial_text_or_id(self):
-        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
         equipment_id = self.service.register_equipment("Soldering Kit", "Electronics", "High", True)
 
         self.assertEqual(self.service.search_members("Amina")[0]["member_id"], member_id)
@@ -232,7 +278,7 @@ class ReportsSearchSeedTests(unittest.TestCase):
         self.assertEqual(self.service.search_equipment(str(equipment_id))[0]["name"], "Soldering Kit")
 
     def test_reports_return_expected_rows(self):
-        member_id = self.service.register_member("STU001", "Amina Doe", "amina@example.com", "555-0101")
+        member_id = self.service.register_member("STU001", "Amina Doe", "amina@alustudent.com", "555-0101")
         self.service.add_training(member_id, "Electronics", "2026-09-21")
         soldering_id = self.service.register_equipment("Soldering Kit", "Electronics", "High", True)
         camera_id = self.service.register_equipment("Camera Kit", "Media", "Medium", False)

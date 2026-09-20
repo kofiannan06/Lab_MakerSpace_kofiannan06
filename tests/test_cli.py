@@ -14,7 +14,7 @@ class CliSmokeTests(unittest.TestCase):
             output = io.StringIO()
 
             with patch.object(main, "DEFAULT_DB_PATH", db_path), patch(
-                "builtins.input", side_effect=["9"]
+                "builtins.input", side_effect=["10"]
             ), patch("sys.stdout", output):
                 main.main()
 

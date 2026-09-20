@@ -23,6 +23,7 @@ python -m unittest discover -s tests -p "test*.py" -v
 ## Main Features
 
 - Register, list, update, and deactivate members.
+- Require member emails to use `@alustudent.com` or `@alueducation.com`.
 - Register, list, and update equipment.
 - Track equipment category, safety level, condition, and availability.
 - Add category-specific safety training records.
@@ -31,6 +32,7 @@ python -m unittest discover -s tests -p "test*.py" -v
 - Search members and equipment.
 - Run SQL-backed reports.
 - Seed sample data for live demonstration.
+- Export the SQLite database to `exports/makerspace_export.db`.
 
 ## Object-Oriented Design
 
@@ -74,7 +76,9 @@ python -m unittest discover -s tests -p "test*.py" -v
 - SQLite schema and CRUD workflows are implemented in `database.py` and `services.py`.
 - Menu features are implemented in `main.py`.
 - Validation prevents unsafe checkout, missing IDs, duplicate student IDs, invalid conditions, and duplicate training records.
+- Email validation rejects non-school email domains.
 - Reports are SQL-backed and available from the CLI.
+- The database can be exported locally from the main menu.
 - Tests verify the main service workflows.
 
 ## AI Assistance Disclosure

@@ -1,8 +1,11 @@
+import shutil
 import sqlite3
 from datetime import date, timedelta
+from pathlib import Path
 
 
 VALID_CONDITIONS = {"Good", "Needs Maintenance", "Retired"}
+ALLOWED_EMAIL_DOMAINS = ("@alustudent.com", "@alueducation.com")
 
 
 class ServiceError(Exception):
@@ -27,13 +30,20 @@ class MakerSpaceService:
             raise ServiceError(f"{field_name} must use YYYY-MM-DD format.") from exc
         return cleaned
 
+    def _require_school_email(self, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not cleaned.endswith(ALLOWED_EMAIL_DOMAINS):
+            raise ServiceError("Email must be a school email ending in @alustudent.com or @alueducation.com.")
+        return cleaned
+
     def register_member(self, student_id: str, name: str, email: str, phone: str) -> int:
         student_id = self._require_text(student_id, "Student ID")
         name = self._require_text(name, "Member name")
+        email = self._require_school_email(email)
         try:
             cursor = self.conn.execute(
                 "INSERT INTO members (student_id, name, email, phone) VALUES (?, ?, ?, ?)",
-                (student_id, name, email.strip(), phone.strip()),
+                (student_id, name, email, phone.strip()),
             )
             self.conn.commit()
             return int(cursor.lastrowid)
@@ -58,7 +68,7 @@ class MakerSpaceService:
         member = self._get_member(member_id)
         updated = {
             "name": self._require_text(name, "Member name") if name is not None else member["name"],
-            "email": email.strip() if email is not None else member["email"],
+            "email": self._require_school_email(email) if email is not None else member["email"],
             "phone": phone.strip() if phone is not None else member["phone"],
             "active": int(active) if active is not None else member["active"],
             "member_id": member_id,
@@ -342,15 +352,30 @@ class MakerSpaceService:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def export_database(self, source_path: str | Path, export_path: str | Path) -> Path:
+        source = Path(source_path)
+        destination = Path(export_path)
+        if not source.exists():
+            raise ServiceError(f"Database file {source} was not found.")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, destination)
+        return destination
+
     def seed_demo_data(self) -> None:
         members = [
-            ("STU001", "Amina Doe", "amina@example.com", "555-0101"),
-            ("STU002", "Kofi Mensah", "kofi@example.com", "555-0102"),
-            ("STU003", "Lina Patel", "lina@example.com", "555-0103"),
+            ("STU001", "Amina Doe", "amina@alustudent.com", "555-0101"),
+            ("STU002", "Kofi Mensah", "kofi@alustudent.com", "555-0102"),
+            ("STU003", "Lina Patel", "lina@alustudent.com", "555-0103"),
         ]
         for student_id, name, email, phone in members:
             if not self.conn.execute("SELECT 1 FROM members WHERE student_id = ?", (student_id,)).fetchone():
                 self.register_member(student_id, name, email, phone)
+            else:
+                self.conn.execute(
+                    "UPDATE members SET email = ?, phone = ? WHERE student_id = ?",
+                    (email, phone, student_id),
+                )
+                self.conn.commit()
 
         equipment_items = [
             ("Soldering Kit", "Electronics", "High", True, "Good"),

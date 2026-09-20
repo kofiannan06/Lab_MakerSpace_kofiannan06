@@ -1,4 +1,5 @@
 .superpowers/
 makerspace.db
+exports/
 __pycache__/
 *.pyc
