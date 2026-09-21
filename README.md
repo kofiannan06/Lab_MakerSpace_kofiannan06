@@ -20,6 +20,10 @@ The app creates `makerspace.db` automatically on first run.
 python -m unittest discover -s tests -p "test*.py" -v
 ```
 
+## Technical Design
+
+For a detailed explanation of the architecture, database schema, OOP design, validation rules, and workflows, see [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md).
+
 ## Main Features
 
 - Register, list, update, and deactivate members.
