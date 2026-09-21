@@ -92,4 +92,4 @@ For a detailed explanation of the architecture, database schema, OOP design, val
 
 ## AI Assistance Disclosure
 
-AI assistance was used to help design the project structure, plan implementation steps, and draft parts of the code and documentation. I reviewed the design and will be responsible for explaining the code, database schema, and live demo behavior.
+AI assistance was used to help design the project structure, debugging my codes faster and it helped to improve and polished myimplementation steps, and the documentation. 
