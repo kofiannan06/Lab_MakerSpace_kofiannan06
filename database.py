@@ -6,13 +6,16 @@ DEFAULT_DB_PATH = Path("makerspace.db")
 
 
 def get_connection(db_path: str | Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
+    """Open a SQLite connection configured for dictionary-like row access."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
+    # Foreign keys protect relationships such as loans -> members/equipment.
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
 def initialize_database(conn: sqlite3.Connection) -> None:
+    """Create all database tables needed by the application."""
     conn.executescript(
         """
         CREATE TABLE IF NOT EXISTS members (
@@ -40,6 +43,7 @@ def initialize_database(conn: sqlite3.Connection) -> None:
             category TEXT NOT NULL,
             completed_date TEXT NOT NULL,
             FOREIGN KEY (member_id) REFERENCES members(member_id),
+            -- One member should not receive duplicate training for one category.
             UNIQUE(member_id, category)
         );
 

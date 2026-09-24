@@ -5,6 +5,7 @@ from services import MakerSpaceService, ServiceError
 EXPORT_PATH = "exports/makerspace_export.db"
 
 
+# Input helpers keep the menu functions short and prevent repeated parsing code.
 def prompt_required(label: str) -> str:
     while True:
         value = input(f"{label}: ").strip()
@@ -37,6 +38,7 @@ def prompt_yes_no(label: str) -> bool:
 
 
 def print_rows(rows: list[dict]) -> None:
+    """Display database rows in a simple CLI-friendly format."""
     if not rows:
         print("No records found.")
         return
@@ -45,6 +47,7 @@ def print_rows(rows: list[dict]) -> None:
 
 
 def manage_members(service: MakerSpaceService) -> None:
+    """Menu for registering, listing, updating, and deactivating members."""
     while True:
         print("\nMembers")
         print("1. Register member")
@@ -91,6 +94,7 @@ def manage_members(service: MakerSpaceService) -> None:
 
 
 def manage_equipment(service: MakerSpaceService) -> None:
+    """Menu for equipment inventory, availability, and safety audit notes."""
     while True:
         print("\nEquipment")
         print("1. Register equipment")
@@ -146,6 +150,7 @@ def manage_equipment(service: MakerSpaceService) -> None:
 
 
 def manage_training(service: MakerSpaceService) -> None:
+    """Menu for category-specific training records."""
     while True:
         print("\nSafety Training")
         print("1. Add training record")
@@ -171,6 +176,7 @@ def manage_training(service: MakerSpaceService) -> None:
 
 
 def checkout_menu(service: MakerSpaceService) -> None:
+    """Run the equipment checkout workflow through the service layer."""
     try:
         loan_id = service.checkout_equipment(
             prompt_int("Member ID"),
@@ -182,6 +188,7 @@ def checkout_menu(service: MakerSpaceService) -> None:
 
 
 def return_menu(service: MakerSpaceService) -> None:
+    """Close an active loan and make the equipment available again."""
     try:
         service.return_equipment(prompt_int("Loan ID"))
         print("Equipment returned.")
@@ -190,6 +197,7 @@ def return_menu(service: MakerSpaceService) -> None:
 
 
 def search_menu(service: MakerSpaceService) -> None:
+    """Search both member and equipment records from one menu option."""
     query = prompt_required("Search query")
     print("\nMembers")
     print_rows(service.search_members(query))
@@ -198,6 +206,7 @@ def search_menu(service: MakerSpaceService) -> None:
 
 
 def reports_menu(service: MakerSpaceService) -> None:
+    """Menu for SQL-backed operational reports."""
     while True:
         print("\nReports")
         print("1. Currently borrowed equipment")
@@ -227,6 +236,7 @@ def reports_menu(service: MakerSpaceService) -> None:
 
 
 def export_database_menu(service: MakerSpaceService) -> None:
+    """Export the SQLite database to a local backup file."""
     try:
         exported_path = service.export_database(DEFAULT_DB_PATH, EXPORT_PATH)
         print(f"Database exported to {exported_path}.")
@@ -235,6 +245,7 @@ def export_database_menu(service: MakerSpaceService) -> None:
 
 
 def main() -> None:
+    """Start the CLI application and initialize the database."""
     conn = get_connection(DEFAULT_DB_PATH)
     initialize_database(conn)
     service = MakerSpaceService(conn)

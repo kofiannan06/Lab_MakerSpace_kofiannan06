@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from datetime import date
 
 
+# These dataclasses model the real-world objects in the MakerSpace domain.
+# They keep simple behavior close to the data it belongs to.
 @dataclass
 class Member:
     member_id: int | None
@@ -33,6 +35,7 @@ class Equipment:
         return self.training_required
 
     def can_be_loaned(self) -> bool:
+        # Equipment must be both available and in good condition before checkout.
         return self.available and self.condition_status == "Good"
 
     def display_label(self) -> str:
@@ -66,6 +69,7 @@ class Loan:
         return self.status == "Active" and self.return_date is None
 
     def is_overdue(self, today: str | None = None) -> bool:
+        # Tests can pass a fixed date so overdue behavior is predictable.
         compare_date = date.fromisoformat(today) if today else date.today()
         due = date.fromisoformat(self.due_date)
         return self.is_active() and due < compare_date

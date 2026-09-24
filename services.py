@@ -13,10 +13,13 @@ class ServiceError(Exception):
 
 
 class MakerSpaceService:
+    """Coordinates validation, business rules, and database operations."""
+
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
 
     def _require_text(self, value: str, field_name: str) -> str:
+        """Validate required text fields before writing to the database."""
         cleaned = value.strip()
         if not cleaned:
             raise ServiceError(f"{field_name} is required.")
@@ -31,6 +34,7 @@ class MakerSpaceService:
         return cleaned
 
     def _require_school_email(self, value: str) -> str:
+        """Allow only official student or facilitator email domains."""
         cleaned = value.strip().lower()
         if not cleaned.endswith(ALLOWED_EMAIL_DOMAINS):
             raise ServiceError("Email must be a school email ending in @alustudent.com or @alueducation.com.")
@@ -196,6 +200,8 @@ class MakerSpaceService:
         member = self._get_member(member_id)
         equipment = self._get_equipment(equipment_id)
 
+        # Safety gate: every checkout must pass member, equipment, condition,
+        # availability, and category-training checks before a loan is created.
         if not member["active"]:
             raise ServiceError("Inactive members cannot borrow equipment.")
         if not equipment["available"]:
@@ -228,6 +234,7 @@ class MakerSpaceService:
         if loan["status"] != "Active" or loan["return_date"] is not None:
             raise ServiceError(f"Loan ID {loan_id} was already returned.")
 
+        # Returning a loan closes the loan record and makes the equipment available.
         returned = date.fromisoformat(self._require_date(return_date, "Return date")).isoformat() if return_date else date.today().isoformat()
         self.conn.execute(
             """
@@ -353,6 +360,7 @@ class MakerSpaceService:
         return [dict(row) for row in rows]
 
     def export_database(self, source_path: str | Path, export_path: str | Path) -> Path:
+        """Copy the SQLite file so it can be backed up or inspected locally."""
         source = Path(source_path)
         destination = Path(export_path)
         if not source.exists():
@@ -369,6 +377,7 @@ class MakerSpaceService:
         logged_date: str,
     ) -> int:
         self._get_equipment(equipment_id)
+        # Audit notes preserve why equipment needs attention and who logged it.
         note = self._require_text(note, "Audit note")
         logged_by = self._require_text(logged_by, "Logged by")
         logged_date = self._require_date(logged_date, "Logged date")
@@ -419,6 +428,7 @@ class MakerSpaceService:
         return [dict(row) for row in rows]
 
     def seed_demo_data(self) -> None:
+        """Load repeatable sample data for demonstrations without duplicates."""
         members = [
             ("STU001", "Amina Doe", "amina@alustudent.com", "555-0101"),
             ("STU002", "Kofi Mensah", "kofi@alustudent.com", "555-0102"),
@@ -453,18 +463,21 @@ class MakerSpaceService:
             self.add_training(kofi["member_id"], "3D Printing", "2026-09-21")
 
     def _get_member(self, member_id: int) -> dict:
+        """Fetch a member or raise a clear error for the CLI."""
         row = self.conn.execute("SELECT * FROM members WHERE member_id = ?", (member_id,)).fetchone()
         if row is None:
             raise ServiceError(f"Member ID {member_id} was not found.")
         return dict(row)
 
     def _get_equipment(self, equipment_id: int) -> dict:
+        """Fetch equipment or raise a clear error for the CLI."""
         row = self.conn.execute("SELECT * FROM equipment WHERE equipment_id = ?", (equipment_id,)).fetchone()
         if row is None:
             raise ServiceError(f"Equipment ID {equipment_id} was not found.")
         return dict(row)
 
     def _get_loan(self, loan_id: int) -> dict:
+        """Fetch a loan or raise a clear error for the CLI."""
         row = self.conn.execute("SELECT * FROM loans WHERE loan_id = ?", (loan_id,)).fetchone()
         if row is None:
             raise ServiceError(f"Loan ID {loan_id} was not found.")
